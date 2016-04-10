@@ -9,7 +9,7 @@ import copy
 #    1: debug initial 
 #    2: debug IO 
 #    3:sub function for the ENUMERATION-ASK
-DEBUG = 3
+DEBUG = 0
 #------------------------------------------------------------------------------------------
 
 class QueryNode(object):
@@ -17,6 +17,18 @@ class QueryNode(object):
         self.type = None    #0: P   1: EU    2: MEU
         self.query=[]
         self.cond = []
+        '''
+        example02.txt:
+        P(Demoralize = + | LeakIdea = -, Infiltration = -)
+        self.type = 0
+        self.query=[["Demoralize","+"]]
+        self.cond = [["LeakIdea","-"],["Infiltration","-"]]
+
+        MEU(Infiltration, LeakIdea)
+        self.type = 2
+        self.query=[["Infiltration",None],["LeakIdea",None]]
+        self.cond = []        
+        '''
     def initialize(self,s):
         if s[0]=="P":
             self.type = 0
@@ -46,10 +58,10 @@ class QueryNode(object):
         else:
             return False
     def handlequery(self,q):
-        node = [None,0]
+        node = [None,None]
         part = q.split("=")
         if len(part)==1:
-            node[0]=part[0]
+            node[0]=part[0].strip(" ")
         elif len(part)==2:
             node[0] = part[0].strip(" ")
             val = part[1].strip(" ")
@@ -167,6 +179,7 @@ class BayesianNetwork(object):
     def __init__(self,infile):
         self.query = []
         self.Net={}
+        self.DecisionNode=[]
         self.utility = None  # utility node type is same as bayesnode type
         self.lines = self.openInfile(infile)
         self.output = []
@@ -208,6 +221,8 @@ class BayesianNetwork(object):
             ret = bn.initialize(self.lines[start:i])
             if ret==False:return False
             self.Net[bn.node] = bn
+            if bn.type == 1:
+                self.DecisionNode.append(bn.node)
             if i==len(self.lines) or self.lines[i]=="******":
                 return i+1
             else:
@@ -219,6 +234,7 @@ class BayesianNetwork(object):
         ret = ut.initialize(self.lines[i:])
         if ret == False:return False
         self.utility=ut
+        self.Net[ut.node] = ut
         return True
     def construct(self):
         '''
@@ -333,42 +349,176 @@ class BayesianNetwork(object):
 
     #------------------------------------------------------------------------------------------
     # function to run the bayes
-    def MainRun(self):
-        for eachquery in self.query:
-            if eachquery.type == 0 : #type = P().. will call ENUMERATION_ASK
-                templist =[]
-                q=[]
-                e = {}
+    def BayesQuery(self,eachquery):
+        #for eachquery in self.query:
+        if True:
 
-                for eache in eachquery.cond:
-                    e[eache[0]]=eache[1]
-                for i,X in enumerate(eachquery.query):
-                    q.append(X[1])
-                    e[X[0]]=X[1]
-                    teme = copy.deepcopy(e)
-                    val = self.ENUMERATION_ASK(X[0],teme)
-                    templist.append(val)
-                if DEBUG ==3 and len(eachquery.query)==3:
-                    pdb.set_trace()
-
-                while len(templist)!=1:
-                    last = templist.pop()
-                    first = templist.pop()
-                    tem = {}
-                    for i in first.keys():
-                        for j in last.keys():
-                            tem[i+j] = first[i]*last[j]
-                    templist.append(tem)
-                val = round(templist[0]["".join(q)],2)
-
-                #val = round(templist[-1][eachquery.query[-1][1]],2)
-                valstr = str(val).ljust(4,"0")
+            if eachquery.type == 0 : #
+                '''
+                type = P().. will call ENUMERATION_ASK
+                '''
+                templist = self.ProbQuery(eachquery)
+                val = 1.0
+                for i,q in enumerate(eachquery.query):
+                    val*=templist[i][q[1]]
+                valstr = str(round(val,2)).ljust(4,"0")
                 self.output.append(valstr)
-            elif eachquery.type == 1: # type = EU().. contain dicision node
-                pass
-            elif eachquery.type == 2: # type = MEU().. contain dicision node
-                pass
-        self.writeFile()
+            
+
+            elif eachquery.type == 1: # 
+                '''
+                type = EU().. contain dicision node
+                '''
+                #while eachquery.query:
+                #    eachquery.cond.append(eachquery.query.pop())
+                #eachquery.query.append([self.utility.node,"+"])
+                '''
+                For the dicision node: we should handle it first:
+                
+                example02.txt:
+
+                EU(Infiltration = + | LeakIdea = +)
+
+                Convert it from
+
+                QueryNode.query= [["Infiltration","+"]]
+                QueryNode.cond = [["LeakIdea","+"]]
+
+                To
+                QueryNode.query= [["utility","+"]]
+                QueryNode.cond = [["Infiltration","+"],["LeakIdea","+"]]
+                '''
+
+                eachquery.cond = copy.deepcopy(eachquery.query)+eachquery.cond
+                eachquery.query = [[self.utility.node,"+"]]
+                val = self.EuQuery(eachquery)
+                valstr = str(int(round(val,0)))
+                self.output.append(valstr)
+
+
+            elif eachquery.type == 2: 
+                '''
+                type = MEU().. contain dicision node
+                '''
+                '''
+                For the dicision node: we should handle it first:
+
+                example03.txt:
+                MEU(Infiltration, LeakIdea)
+
+                Convert it from
+
+                QueryNode.query= [["Infiltration",None],["LeakIdea",None]]
+                QueryNode.cond = []
+
+                To
+                QueryNode.query= [["utility","+"]]
+                QueryNode.cond = [["Infiltration",None],["LeakIdea",None]]
+
+                and for each dicision node that doesn't have value, we assign it and then calculate
+
+                Infiltration | LeakIdea | utility(+) | utility(-)
+                     +       |     +    |     ?      |     ?
+                     +       |     -    |     ?      |     ?
+                     -       |     +    |     ?      |     ?
+                     -       |     -    |     ?      |     ?
+                Finally we can make dicision based on the utility value
+
+                '''
+                eachquery.cond = copy.deepcopy(eachquery.query)+eachquery.cond
+                eachquery.query = [[self.utility.node,"+"]]
+                dicision,vallist=[],{}
+                for i,q in enumerate(eachquery.cond):
+                    if self.Net[q[0]].type == 1 and q[1]==None:
+                        dicision.append(q)
+                num = 2**(len(dicision))
+                
+                for i in xrange(int(num)):
+                    v = bin(i)[2:].rjust(len(dicision),"0")
+                    dicnode = ""
+                    for i,c in enumerate(v):
+                        dicision[i][1]= "+" if c=="1" else "-"
+                        dicnode+=dicision[i][1]
+                    val = self.EuQuery(eachquery)
+
+                    vallist[dicnode] = val
+                for key in vallist.keys():
+                    if vallist[key]>=vallist[dicnode]:
+                        dicnode = key
+                val = str(int(round(vallist[dicnode],0)))
+                self.output.append(" ".join(dicnode)+" "+val)
+
+
+    def ProbQuery(self,eachquery):
+        '''
+        For the dicision node: this part assigns the value to it according to the query
+        '''
+        if self.DecisionNode:
+            for q in eachquery.query:
+                if self.Net[q[0]].type == 1:
+                    if q[1]=="+":
+                        self.Net[q[0]].prob = 1.0  
+                    elif q[1] =="-":
+                        self.Net[q[0]].prob = 0.0  
+                    else:
+                        return -1
+            for cond in eachquery.cond:
+                if self.Net[cond[0]].type == 1:
+                    if cond[1]=="+":
+                        self.Net[cond[0]].prob = 1.0  
+                    elif cond[1]=="-":
+                        self.Net[cond[0]].prob = 0.0 
+                    else:
+                        return -1
+
+        '''
+        call ENUMERATION_ASK to calculate probability
+        '''
+        templist =[]
+        q=[]
+        e = {}
+        for eache in eachquery.cond:
+             e[eache[0]]=eache[1]
+        for i,X in enumerate(eachquery.query):
+            q.append(X[1])
+            e[X[0]]=X[1]
+            teme = copy.deepcopy(e)
+            val = self.ENUMERATION_ASK(X[0],teme)
+            templist.append(val)
+        if DEBUG ==3:
+            pdb.set_trace()
+
+
+        '''
+        while len(templist)!=1:
+            last = templist.pop()
+            first = templist.pop()
+            tem = {}
+            for i in first.keys():
+                for j in last.keys():
+                    tem[i+j] = first[i]*last[j]
+            templist.append(tem)
+
+        val = round(templist[0]["".join(q)],2)
+        val = round(templist[-1][eachquery.query[-1][1]],2)
+        '''
+        
+        return templist
+        
+    def EuQuery(self,eachquery):
+        templist = self.ProbQuery(eachquery)
+        val = 0
+
+        ''' calculate EU '''
+        for i,q in enumerate(eachquery.query):
+            val+=templist[i][q[1]]
+        return val
+
+
+    def MainRun(self,outputname):
+        for eachquery in self.query:
+            self.BayesQuery(eachquery)
+        self.writeFile(outputname)
 
     #------------------------------------------------------------------------------------------
 
@@ -390,9 +540,20 @@ class BayesianNetwork(object):
             return False 
     
 
-    def writeFile(self):
-        for i in self.output:
-            print i
+    def writeFile(self,outputname):
+
+        try:
+            fjob = open(outputname,"w")
+            if self.output:
+                fjob.write(self.output[0])
+                for i in self.output[1:]:
+                    fjob.write("\n"+i)
+            fjob.close()
+        except:
+            exc_type, exc_obj, exc_tb = sys.exc_info()
+            print exc_type,exc_obj,exc_tb.tb_lineno
+            print "write file failure"
+            return False  
 
     #------------------------------------------------------------------------------------------
 
@@ -416,8 +577,10 @@ if __name__=="__main__":
     res = bayes.initialize()
     if res==False:
         print "initialize false"
+        exit(0)
     if DEBUG == 2:    
         e = {"Demoralize":"-","NightDefense":"-","Infiltration":"+","LeakIdea":"-"}
         print bayes.queryProb("Demoralize",e)
         print bayes.SortOrder(bayes.Net.keys())
-    bayes.MainRun()
+    outputname = "output.txt"
+    bayes.MainRun(outputname)
