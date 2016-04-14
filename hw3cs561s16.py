@@ -3,6 +3,7 @@ import pdb
 import sys
 import math
 import copy
+from decimal import Decimal
 
 #------------------------------------------------------------------------------------------
 #    0 : NOTHING 
@@ -361,7 +362,9 @@ class BayesianNetwork(object):
                 val = 1.0
                 for i,q in enumerate(eachquery.query):
                     val*=templist[i][q[1]]
-                valstr = str(round(val,2)).ljust(4,"0")
+                valt = Decimal(str(val)).quantize(Decimal('.01'))#
+                #pdb.set_trace()
+                valstr = str(valt)
                 self.output.append(valstr)
             
 
@@ -392,7 +395,10 @@ class BayesianNetwork(object):
                 eachquery.cond = copy.deepcopy(eachquery.query)+eachquery.cond
                 eachquery.query = [[self.utility.node,"+"]]
                 val = self.EuQuery(eachquery)
-                valstr = str(int(round(val,0)))
+                valt = Decimal(str(val)).quantize(Decimal('1.'))#
+                valstr = str(valt)#
+                #pdb.set_trace()
+                #valstr = str(int(round(val,0)))
                 self.output.append(valstr)
 
 
@@ -445,8 +451,12 @@ class BayesianNetwork(object):
                 for key in vallist.keys():
                     if vallist[key]>=vallist[dicnode]:
                         dicnode = key
-                val = str(int(round(vallist[dicnode],0)))
-                self.output.append(" ".join(dicnode)+" "+val)
+                #valstr = str(int(round(vallist[dicnode],0)))
+                val = vallist[dicnode]#
+                valt = Decimal(str(val)).quantize(Decimal('1.'))#
+                valstr = str(valt)#
+                
+                self.output.append(" ".join(dicnode)+" "+valstr)
 
 
     def ProbQuery(self,eachquery):
@@ -454,6 +464,7 @@ class BayesianNetwork(object):
         For the dicision node: this part assigns the value to it according to the query
         '''
         if self.DecisionNode:
+            tem = set()
             for q in eachquery.query:
                 if self.Net[q[0]].type == 1:
                     if q[1]=="+":
@@ -461,7 +472,9 @@ class BayesianNetwork(object):
                     elif q[1] =="-":
                         self.Net[q[0]].prob = 0.0  
                     else:
+                        #self.Net[q[0]].prob = 0.0 
                         return -1
+                tem.add(q[0])
             for cond in eachquery.cond:
                 if self.Net[cond[0]].type == 1:
                     if cond[1]=="+":
@@ -469,7 +482,12 @@ class BayesianNetwork(object):
                     elif cond[1]=="-":
                         self.Net[cond[0]].prob = 0.0 
                     else:
+                        #self.Net[q[0]].prob = 0.0 
                         return -1
+                tem.add(cond[0])
+        for item in self.DecisionNode:
+            if item not in tem:
+                self.Net[item].prob = 1.0 
 
         '''
         call ENUMERATION_ASK to calculate probability
@@ -571,7 +589,6 @@ class BayesianNetwork(object):
 
 
 if __name__=="__main__":
-    print "start"
     argv = sys.argv
     bayes = BayesianNetwork(argv[2])
     res = bayes.initialize()
@@ -583,4 +600,5 @@ if __name__=="__main__":
         print bayes.queryProb("Demoralize",e)
         print bayes.SortOrder(bayes.Net.keys())
     outputname = "output.txt"
+    #bayes.MainRun(argv[2][:-3]+outputname)
     bayes.MainRun(outputname)
