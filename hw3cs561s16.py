@@ -362,7 +362,7 @@ class BayesianNetwork(object):
                 val = 1.0
                 for i,q in enumerate(eachquery.query):
                     val*=templist[i][q[1]]
-                valt = Decimal(str(val)).quantize(Decimal('.01'))#
+                valt = Decimal(str(val+1e-8)).quantize(Decimal('.01'))#
                 #pdb.set_trace()
                 valstr = str(valt)
                 self.output.append(valstr)
@@ -395,7 +395,7 @@ class BayesianNetwork(object):
                 eachquery.cond = copy.deepcopy(eachquery.query)+eachquery.cond
                 eachquery.query = [[self.utility.node,"+"]]
                 val = self.EuQuery(eachquery)
-                valt = Decimal(str(val)).quantize(Decimal('1.'))#
+                valt = Decimal(str(val+1e-8)).quantize(Decimal('1.'))#
                 valstr = str(valt)#
                 #pdb.set_trace()
                 #valstr = str(int(round(val,0)))
@@ -453,7 +453,7 @@ class BayesianNetwork(object):
                         dicnode = key
                 #valstr = str(int(round(vallist[dicnode],0)))
                 val = vallist[dicnode]#
-                valt = Decimal(str(val)).quantize(Decimal('1.'))#
+                valt = Decimal(str(val+1e-8)).quantize(Decimal('1.'))#
                 valstr = str(valt)#
                 
                 self.output.append(" ".join(dicnode)+" "+valstr)
